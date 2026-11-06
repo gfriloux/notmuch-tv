@@ -1,5 +1,7 @@
 # notmuch-tv
 
+![notmuch-tv: your mailbox, on every channel](docs/images/banner.webp)
+
 Cable channels for [television](https://github.com/alexpasmantier/television)
 (`tv`) that read a [notmuch](https://notmuchmail.org) mailbox. I wrote them to
 clean up my mail: the menu answers "who fills my mailbox?" with top senders,
