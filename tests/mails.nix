@@ -138,10 +138,18 @@ in
           if grep -q "$esc" $plain_; then echo "ESC in NO_COLOR output" >&2; exit 1; fi
           NO_COLOR= notmuch-tv show "$ptid" >$out_
           [ "$(sed -n 1p $out_)" = "$esc[2m$sep$esc[0m" ]
-          grep -q "^$esc\[1mFrom:$esc\[0m" $out_
-          grep -qF "$esc[1mSubject:$esc[0m $esc[1mProject$esc[0m" $out_
+          grep -q "^$esc\[1;35mFrom:$esc\[0m" $out_
+          grep -q "^$esc\[1;35mFrom:$esc\[0m .*$esc\[36malice@example.com$esc\[0m" $out_
+          grep -qF "$esc[1;35mSubject:$esc[0m $esc[1mProject$esc[0m" $out_
           [ "$(grep -c "" $out_)" = "$(grep -c "" $plain_)" ]
-          [ "$(sed "s/$esc\[[0-9]*m//g" $out_)" = "$(cat $plain_)" ]
+          [ "$(sed "s/$esc\[[0-9;]*m//g" $out_)" = "$(cat $plain_)" ]
+
+          # Tags: unread bold yellow, others yellow, spaces uncoloured.
+          lunch_=$TMPDIR/lunch
+          NO_COLOR= notmuch-tv show "$tid" >$lunch_
+          grep -qF "$esc[1;33munread$esc[0m" $lunch_
+          grep -qF "$esc[33minbox$esc[0m" $lunch_
+          grep -q "^$esc\[1;35mTags:$esc\[0m " $lunch_
 
           NO_COLOR= notmuch-tv show "$itid" >$out_
           grep -q "^$esc\[2m\[attachment: invoice.pdf, application/pdf,.*\]$esc\[0m$" $out_
@@ -202,18 +210,37 @@ in
       mtid=$(NOTMUCH_CONFIG=$d/config notmuch search --output=threads '*' | sed 's/^thread://')
       NOTMUCH_CONFIG=$d/config NO_COLOR= notmuch-tv show "$mtid" >$out_
       if grep -q "$(printf '[]')" $out_; then echo "marker bytes in output" >&2; cat -v $out_ >&2; exit 1; fi
-      grep -qxF "$esc[1mFrom:$esc[0m    \"SFrom\" <x@example.com>" $out_ || { cat -v $out_ >&2; exit 1; }
-      grep -qxF "$esc[1mSubject:$esc[0m $esc[1mSSubj$esc[0m" $out_
+      grep -qxF "$esc[1;35mFrom:$esc[0m    \"SFrom\" <$esc[36mx@example.com$esc[0m>" $out_ || { cat -v $out_ >&2; exit 1; }
+      grep -qxF "$esc[1;35mSubject:$esc[0m $esc[1mSSubj$esc[0m" $out_
       grep -qxF "Sbody one" $out_
       grep -qxF "Ym9keQ==" $out_
       grep -qxF "Hx: y" $out_
       grep -q "^$esc\[2m\[attachment: Sa.txt, text/plain.*\]$esc\[0m$" $out_ || { cat -v $out_ >&2; exit 1; }
       [ "$(grep -cxF "$esc[2m$sep$esc[0m" $out_)" = 1 ]
 
-      NOTMUCH_CONFIG=$TMPDIR/esc/config NO_COLOR= notmuch-tv show "$etid" >$out_
+          # URLs and addresses in body lines; quote lines keep one colour.
+          utid=$(mkdb url 'text/plain; charset=UTF-8' "$(printf 'See https://example.org/a?b=c@d.com, and write to bob@example.net.\nGo (ftp://f.example.org/x).\n> see https://example.org\n>> bob@example.net\n-- \nhttps://sig.example.org')")
+          NOTMUCH_CONFIG=$TMPDIR/url/config NO_COLOR= notmuch-tv show "$utid" >$out_
+          grep -qxF "See $esc[4;36mhttps://example.org/a?b=c@d.com$esc[0m, and write to $esc[36mbob@example.net$esc[0m." $out_ || { cat -v $out_ >&2; exit 1; }
+          grep -qxF "Go ($esc[4;36mftp://f.example.org/x$esc[0m)." $out_ || { cat -v $out_ >&2; exit 1; }
+          grep -qxF "$esc[32m> see https://example.org$esc[0m" $out_ || { cat -v $out_ >&2; exit 1; }
+          grep -qxF "$esc[36m>> bob@example.net$esc[0m" $out_ || { cat -v $out_ >&2; exit 1; }
+          grep -qxF "$esc[2mhttps://sig.example.org$esc[0m" $out_ || { cat -v $out_ >&2; exit 1; }
+          NOTMUCH_CONFIG=$TMPDIR/url/config NO_COLOR=1 notmuch-tv show "$utid" >$out_
+          grep -qxF "See https://example.org/a?b=c@d.com, and write to bob@example.net." $out_
+
+          # Tag names with runs of spaces: whitespace is kept as is, with or without colour.
+          NOTMUCH_CONFIG=$TMPDIR/url/config notmuch tag "+x  y " '*'
+          NOTMUCH_CONFIG=$TMPDIR/url/config NO_COLOR=1 notmuch-tv show "$utid" >$out_
+          grep -qxF "Tags:    inbox x  y " $out_ || { cat -A $out_ >&2; exit 1; }
+          NOTMUCH_CONFIG=$TMPDIR/url/config NO_COLOR= notmuch-tv show "$utid" >$TMPDIR/tagc
+          [ "$(sed "s/$esc\[[0-9;]*m//g" $TMPDIR/tagc)" = "$(cat $out_)" ] || { cat -A $TMPDIR/tagc >&2; exit 1; }
+          grep -qF "$esc[33minbox$esc[0m $esc[33mx$esc[0m" $TMPDIR/tagc
+
+          NOTMUCH_CONFIG=$TMPDIR/esc/config NO_COLOR= notmuch-tv show "$etid" >$out_
           grep -q 'RED' $out_
           [ "$(grep -c "$esc" $out_)" -gt 0 ]
-          [ "$(grep -o "$esc.\{0,4\}" $out_ | grep -vcE "^$esc\[(0|1|2|32|36|33)m" || true)" = 0 ]
+          [ "$(grep -o "$esc.\{0,6\}" $out_ | grep -vcE "^$esc\[(0|1|2|32|36|33|1;35|1;33|4;36)m" || true)" = 0 ]
 
           # Control characters in authors and subject (ESC, U+009B) are dropped from
           # the list; UTF-8 text around them survives.

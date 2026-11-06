@@ -143,9 +143,12 @@ The preview shows every message of the thread, newest first: From, To, Date,
 Subject and Tags, then the text body. The preview's `Date:` is in local time,
 so it can differ from the UTC date in the list. A mail with only an HTML part
 is rendered with w3m. Attachments are listed after the body. The preview stops
-at 500 lines. Separators and attachment lines are dim, header labels and the
-subject are bold, quoted lines are green, cyan and yellow by depth, and a
-signature (from a `-- ` line on) is dim. Set `NO_COLOR` to turn colours off.
+at 500 lines. Separators and attachment lines are dim, header labels are bold
+magenta, the subject is bold, tags are yellow (`unread` bold), email addresses
+are cyan, URLs in the body are cyan and underlined, quoted lines are green,
+cyan and yellow by depth, and a signature (from a `-- ` line on) is dim. Quoted
+lines and the signature keep a single colour, without address or URL colouring.
+Set `NO_COLOR` to turn colours off.
 Control characters in mail data (terminal escape sequences included) are
 removed from the lists, the preview and the menu output.
 

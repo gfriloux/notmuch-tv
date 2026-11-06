@@ -263,6 +263,38 @@ colorize() {
   if [ -n "${NO_COLOR:-}" ]; then color=0; fi
   awk -v color="$color" '
     function wrap(code, s) { return color ? "\033[" code "m" s "\033[0m" : s }
+    # spans(s, urls): s with email addresses (and, when urls is set, URLs)
+    # coloured, whichever starts first; a URL wins a tie, so an address inside
+    # a URL stays part of it. Trailing punctuation is left out of a URL.
+    function spans(s, urls,    out, us, ul, as, al, u) {
+      out = ""
+      while (s != "") {
+        us = urls && match(s, /(https?|ftp):\/\/[^[:space:]]+/) ? RSTART : 0
+        ul = RLENGTH
+        as = match(s, /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z][A-Za-z]+/) ? RSTART : 0
+        al = RLENGTH
+        if (us && (!as || us <= as)) {
+          u = substr(s, us, ul)
+          while (u != "" && match(u, "[]\047\".,;:!?)>]$")) u = substr(u, 1, length(u) - 1)
+          if (u ~ /^(https?|ftp):\/\/$/) { out = out substr(s, 1, us + ul - 1); s = substr(s, us + ul); continue }
+          out = out substr(s, 1, us - 1) wrap("4;36", u)
+          s = substr(s, us + length(u))
+        } else if (as) {
+          out = out substr(s, 1, as - 1) wrap(36, substr(s, as, al))
+          s = substr(s, as + al)
+        } else break
+      }
+      return out s
+    }
+    function tags(s,    out) {
+      if (!color) return s
+      out = ""
+      while (match(s, /[^ ]+/)) {
+        out = out substr(s, 1, RSTART - 1) wrap(substr(s, RSTART, RLENGTH) == "unread" ? "1;33" : 33, substr(s, RSTART, RLENGTH))
+        s = substr(s, RSTART + RLENGTH)
+      }
+      return out s
+    }
     {
       kind = substr($0, 1, 1) == "\002" ? substr($0, 2, 1) : ""
       line = kind == "" ? $0 : substr($0, 3)
@@ -274,8 +306,9 @@ colorize() {
       rest = substr(line, c + 1)
       if (label == "Subject:" && match(rest, /[^ ]/)) {
         rest = substr(rest, 1, RSTART - 1) wrap(1, substr(rest, RSTART))
-      }
-      print wrap(1, label) rest
+      } else if (label == "From:" || label == "To:") rest = spans(rest, 0)
+      else if (label == "Tags:") rest = tags(rest)
+      print wrap("1;35", label) rest
       next
     }
     kind == "A" { print wrap(2, line); next }
@@ -286,7 +319,7 @@ colorize() {
       if (sig) { print line == "" ? "" : wrap(2, line); next }
       depth = 0
       while (match(t, /^ *>/)) { depth++; t = substr(t, RLENGTH + 1) }
-      if (depth == 0) print line
+      if (depth == 0) print spans(line, 1)
       else print wrap(depth == 1 ? 32 : depth == 2 ? 36 : 33, line)
     }'
 }
